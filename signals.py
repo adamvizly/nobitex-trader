@@ -28,9 +28,9 @@ class RSI(IndicatorStatus):
     def apply_indicator(self) -> None:
         self.df['RSI'] = self.rsi.rsi()
 
-    def get_signal(self) -> tuple[bool, bool]:
-        self.sell = self.latest_candle['RSI'].values[0] > 70
-        self.buy = self.latest_candle['RSI'].values[0] < 30
+    def get_signal(self, sell_threshold, buy_threshold) -> tuple[bool, bool]:
+        self.sell = self.latest_candle['RSI'].values[0] > sell_threshold
+        self.buy = self.latest_candle['RSI'].values[0] < buy_threshold
         return (self.sell, self.buy)
 
 
@@ -62,7 +62,8 @@ class MACDIndex(IndicatorStatus):
         self.df['MACDS'] = self.macd.macd_signal()
 
     def get_signal(self) -> tuple[bool, bool]:
-        pass
+        self.sell = self.latest_candle['MACD'].values[0] < self.latest_candle['MACDS'].values[0]
+        self.buy = self.latest_candle['MACD'].values[0] > self.latest_candle['MACDS'].values[0]
 
 
 class ATR(IndicatorStatus):
@@ -75,55 +76,5 @@ class ATR(IndicatorStatus):
     def apply_indicator(self) -> None:
         self.df['ATR'] = self.atr.average_true_range()
 
-    def get_signal(self) -> tuple[bool, bool]:
-        pass
-
-
-def get_signal(df):
-    df = dropna(df)
-    df = RSI(df, 14)
-    df = MACDIndex(df, 26, 12, 9)
-    latest_data = df.tail(1)
-    second_latest_data = df.iloc[-2:-1]
-    macd_sell = (latest_data['MACD'].values[0] < latest_data['MACDS'].values[0]) and (second_latest_data['MACD'].values[0] >= second_latest_data['MACDS'].values[0]) 
-    macd_buy = (latest_data['MACD'].values[0] > latest_data['MACDS'].values[0]) and (second_latest_data['MACD'].values[0] <= second_latest_data['MACDS'].values[0]) 
-    rsi_sell = (latest_data['RSI'].values[0] > 70) and (second_latest_data['RSI'].values[0] <= 70)
-    rsi_buy = (latest_data['RSI'].values[0] < 30) and (second_latest_data['RSI'].values[0] >= 30)
-    return {'buy': macd_buy and rsi_buy, 'sell': macd_sell and rsi_sell, 'time': datetime.fromtimestamp(latest_data['time'])}
-
-
-def back_test_signal(df):
-    df = dropna(df)
-    df = RSI(df, 14)
-    df = MACDIndex(df, 26, 12, 9)
-    df = ATR(df, 14)
-    buy_price = 0
-    profit = 0
-    step_loss = 0
-    for index, row in df.iterrows():
-        if index <= 14:
-            continue
-        latest_data = df.iloc[[index]]
-        second_latest_data = df.iloc[[index - 1]]
-        macd_sell = (latest_data['MACD'].values[0] < latest_data['MACDS'].values[0]) and (second_latest_data['MACD'].values[0] >= second_latest_data['MACDS'].values[0]) 
-        macd_buy = (latest_data['MACD'].values[0] > latest_data['MACDS'].values[0]) and (second_latest_data['MACD'].values[0] <= second_latest_data['MACDS'].values[0]) 
-        rsi_sell = (latest_data['RSI'].values[0] > 70) and (second_latest_data['RSI'].values[0] <= 70)
-        rsi_buy = (latest_data['RSI'].values[0] < 30) and (second_latest_data['RSI'].values[0] >= 30)
-        buy = macd_buy
-        sell = macd_sell
-        price = latest_data['close'].values[0]
-        atr = latest_data['ATR'].values[0]
-        ttt = datetime.fromtimestamp(latest_data['time'])
-        if step_loss > 0 and buy_price > 0 and price <= step_loss:
-            profit += price - buy_price
-            print(f'selling at price {price}, you made {profit} at time {ttt}')
-            step_loss = 0
-        if buy:
-            buy_price = price
-            print(f'buying at price {price} at time {ttt}')
-            step_loss = price - atr
-        if sell and buy_price > 0:
-            profit += price - buy_price
-            print(f'selling at price {price}, you made {profit} at time {ttt}')
-        # print({'buy': {'RSI': rsi_buy, 'MACD': macd_buy}, 'sell': {'RSI': rsi_sell, 'MACD': macd_sell}, 'time': datetime.fromtimestamp(latest_data['time'])})
-
+    def get_atr(self, count) -> float:
+        return self.latest_candle['ATR'].values[0] * count
